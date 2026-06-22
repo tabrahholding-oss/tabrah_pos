@@ -34,6 +34,7 @@ from tabrah_pos.tabrah_pos.doctype.delivery_charges.delivery_charges import (
     get_applicable_delivery_charges as _get_applicable_delivery_charges,
 )
 from frappe.utils.caching import redis_cache
+from frappe.utils import cint, flt
 
 
 @frappe.whitelist()
@@ -1170,8 +1171,8 @@ def sales_invoice(data, invoice=None, taxvalue=None):
         invoice = json.loads(invoice)
         invoice_doc.update(invoice)
 
-        if invoice.get("posa_delivery_date"):
-            invoice_doc.update_stock = 0
+        
+        invoice_doc.update_stock = 1
 
         mop_cash_list = [
             i.mode_of_payment
@@ -1263,7 +1264,7 @@ def sales_invoice(data, invoice=None, taxvalue=None):
                     if invoice_doc.doctype == "Purchase Order":
                         tax_row.update({"category": "Total", "add_deduct_tax": "Add"})
                     tax_row.db_insert()
-
+        clean_invoice_for_v15(invoice_doc)
         invoice_doc.save()
 
         if data.get("due_date"):
@@ -3500,3 +3501,46 @@ def create_kot_from_sales_invoice(doc, method=None):
         return
     
     return create_kot(items=items, table_no=getattr(doc, "table_no", None), company=doc.company, warehouse=doc.set_warehouse, notes=None, pos_opening_shift=getattr(doc, "pos_opening_shift", None), sales_invoice=doc.name)
+
+
+
+def clean_invoice_for_v15(invoice_doc):
+    # Parent check fields
+    invoice_doc.is_return = cint(invoice_doc.get("is_return") or 0)
+    invoice_doc.update_stock = cint(invoice_doc.get("update_stock") or 0)
+    invoice_doc.is_pos = cint(invoice_doc.get("is_pos") or 0)
+    invoice_doc.set_posting_time = cint(invoice_doc.get("set_posting_time") or 0)
+
+    # Empty link fields should be None, not ""
+    if not invoice_doc.get("return_against"):
+        invoice_doc.return_against = None
+
+    # Item rows cleanup
+    for d in invoice_doc.items:
+        d.allow_zero_valuation_rate = cint(d.get("allow_zero_valuation_rate") or 0)
+        d.is_free_item = cint(d.get("is_free_item") or 0)
+
+        if d.get("qty") in ("", None):
+            d.qty = 0
+        else:
+            d.qty = flt(d.qty)
+
+        if d.get("rate") in ("", None):
+            d.rate = 0
+        else:
+            d.rate = flt(d.rate)
+
+        if d.get("amount") in ("", None):
+            d.amount = 0
+        else:
+            d.amount = flt(d.amount)
+
+        if d.get("price_list_rate") in ("", None):
+            d.price_list_rate = 0
+        else:
+            d.price_list_rate = flt(d.price_list_rate)
+
+        if d.get("conversion_factor") in ("", None, 0):
+            d.conversion_factor = 1
+        else:
+            d.conversion_factor = flt(d.conversion_factor)

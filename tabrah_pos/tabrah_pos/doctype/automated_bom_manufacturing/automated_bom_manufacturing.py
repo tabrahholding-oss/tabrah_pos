@@ -64,6 +64,7 @@ class AutomatedBOMManufacturing(Document):
 
 		# Create a new Stock Entry document
 		se = frappe.new_doc("Stock Entry")
+		se.set_posting_time = 1
 		se.posting_date = self.posting_date
 		se.posting_time = self.posting_time
 		se.company = self.company

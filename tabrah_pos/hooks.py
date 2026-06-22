@@ -115,7 +115,9 @@ doc_events = {
 		"on_update_after_submit": "tabrah_pos.custom.stock_entry_pos.on_update_after_submit",
 	}
 }
-
+override_doctype_dashboards = {
+	"Sales Invoice": "tabrah_pos.overrides.sales_invoice_dashboard.get_data"
+}
 # Scheduled Tasks
 # ---------------
 
