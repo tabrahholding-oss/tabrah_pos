@@ -73,7 +73,22 @@ def validate(doc, method):
 def before_submit(doc, method):
     for d in doc.items:
         if d.custom_is_complimentary_item == 1:
-           
+
+            # Use the expense account from the selected complimentary Reason.
+            # Fall back to the company's default expense account if the Reason
+            # has no account set.
+            reason_account = None
+            if d.get("custom_complimentary_reason"):
+                reason_account = frappe.db.get_value(
+                    "Complementary Reason", d.custom_complimentary_reason, "account"
+                )
+            if not reason_account:
+                reason_account = frappe.get_cached_value(
+                    "Company", doc.company, "default_expense_account"
+                )
+            if reason_account:
+                d.expense_account = reason_account
+
             # prevent pricing rules from reapplying rates
             doc.flags.ignore_pricing_rule = True
             doc.ignore_pricing_rule = 1

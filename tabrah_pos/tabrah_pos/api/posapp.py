@@ -3544,3 +3544,18 @@ def clean_invoice_for_v15(invoice_doc):
             d.conversion_factor = 1
         else:
             d.conversion_factor = flt(d.conversion_factor)
+
+
+@frappe.whitelist()
+def get_reasons(company=None):
+    """Return Complementary Reasons for the POS complimentary-item selector,
+    optionally filtered by company."""
+    filters = {}
+    if company:
+        filters["company"] = company
+    return frappe.get_all(
+        "Complementary Reason",
+        filters=filters,
+        fields=["name as reason_code", "reason_name", "description", "account", "company"],
+        order_by="reason_name asc",
+    )

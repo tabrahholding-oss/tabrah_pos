@@ -115,6 +115,29 @@
                 <v-checkbox v-model="complementaryItem" color="red" label="Complementary Item" @change="handleComplementaryToggle"
                   hide-details></v-checkbox>
               </v-col>
+              <v-col cols="12" md="12" class="my-0" v-if="complementaryItem">
+                <v-text-field class="b-radius-8" variant="outlined" type="password"
+                  label="Enter Pin *" v-model="pin" hide-details="auto"
+                  :rules="[v => !!v || 'Pin is required for complementary item']"></v-text-field>
+              </v-col>
+              <v-col cols="12" md="12" class="my-0" v-if="complementaryItem">
+                <v-autocomplete class="b-radius-8" variant="outlined"
+                  label="Complimentary Reason *"
+                  :items="reasonList"
+                  item-title="reason_name"
+                  item-value="reason_code"
+                  v-model="selectedReason"
+                  @update:model-value="onReasonSelect"
+                  hide-details="auto"
+                  :rules="[v => !!v || 'Reason is required for complementary item']">
+                  <template v-slot:item="{ props, item }">
+                    <v-list-item v-bind="props"
+                      :title="`${item.raw.reason_code} - ${item.raw.reason_name}`"
+                      :subtitle="item.raw.description"></v-list-item>
+                  </template>
+                </v-autocomplete>
+              </v-col>
+
               <!-- <v-col cols="12" md="12" class="my-0">
                 <v-checkbox v-model="complementaryLoopy" color="red" label="Loyalty Complementary Item" @change="handleLoopyToggle"
                   hide-details></v-checkbox>
@@ -175,6 +198,9 @@ import eventBus from "../../bus";
     const complementaryItem = ref(false);
     const itemComment = ref('')
     const editingIndex = ref(null);
+    const pin = ref("");
+    const reasonList = ref([]);
+    const selectedReason = ref(null);
 
     const increaseQuantity = () => {
       quantity.value++;
@@ -194,7 +220,57 @@ import eventBus from "../../bus";
       }).format(num);
     };
 
+    // Load the list of Complementary Reasons (filtered by company) for the selector
+    const loadReasons = () => {
+      frappe.call({
+        method: "tabrah_pos.tabrah_pos.api.posapp.get_reasons",
+        args: { company: pos_profile.value ? pos_profile.value.company : null },
+        callback: (r) => {
+          reasonList.value = r.message || [];
+        },
+      });
+    };
+
+    // Store selected reason (and its account) on the product
+    const onReasonSelect = (val) => {
+      selectedProduct.value.custom_complimentary_reason = val || "";
+      const reason = reasonList.value.find((x) => x.reason_code === val);
+      selectedProduct.value.custom_complimentary_account = reason ? reason.account : "";
+    };
+
+    // Verify the entered PIN against the POS Profile employee list (same as OrderSummary)
+    const verifyPin = () => {
+      const employeeList = pos_profile.value.employee_list || [];
+      return employeeList.some((emp) => emp.pin_for_pos === parseInt(pin.value));
+    };
+
     const addToCart = () => {
+      // A valid manager/employee PIN is required for complementary items
+      if (complementaryItem.value) {
+        if (!pin.value) {
+          eventBus.emit("show_mesage", {
+            text: "Pin is required for complementary item.",
+            color: "error",
+          });
+          return;
+        }
+        if (!verifyPin()) {
+          eventBus.emit("show_mesage", {
+            text: "Invalid Pin. Please try again!",
+            color: "error",
+          });
+          return;
+        }
+        if (!selectedReason.value) {
+          eventBus.emit("show_mesage", {
+            text: "Reason is required for complementary item.",
+            color: "error",
+          });
+          return;
+        }
+        // Ensure the reason/account is synced onto the product before emitting
+        onReasonSelect(selectedReason.value);
+      }
       if (discount.value <= pos_profile.value.posa_max_discount_allowed) {
         // Always sync complementary state before emitting
         selectedProduct.value.complementryItem = Boolean(complementaryItem.value);
@@ -210,6 +286,8 @@ import eventBus from "../../bus";
           eventBus.emit("exist-item-cart", selectedProduct.value);
         }
         complementaryItem.value = false;
+        pin.value = "";
+        selectedReason.value = null;
         dialog.value = false;
         discount.value = "";
         // Only reset rate if complementary is checked, otherwise preserve manual edits
@@ -273,6 +351,10 @@ const handleComplementaryToggle = () => {
     }
     selectedProduct.value.complementryItem = false;
     selectedProduct.value.custom_is_complimentary_item = false;
+    selectedProduct.value.custom_complimentary_reason = "";
+    selectedProduct.value.custom_complimentary_account = "";
+    pin.value = "";
+    selectedReason.value = null;
   }
 };
 
@@ -314,6 +396,7 @@ const handleComplementaryToggle = () => {
 
     onMounted(() => {
       eventBus.on("open-product-dialog", (data) => {
+        loadReasons();
         editingIndex.value = data.index ?? null;
         updateQty.value = data.flag;
         quantity.value = data.product.qty ? data.product.qty : 1;
@@ -321,6 +404,8 @@ const handleComplementaryToggle = () => {
         selectedProduct.value = JSON.parse(JSON.stringify(data.product));
         itemComment.value = data.product.comment || '';
         complementaryItem.value = Boolean(data.product.complementryItem);
+        pin.value = "";
+        selectedReason.value = data.product.custom_complimentary_reason || null;
 
         // If not complementary, and original_rate is missing or zero, but rate is also zero, try to recover
         if (!complementaryItem.value) {

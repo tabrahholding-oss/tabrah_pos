@@ -1863,6 +1863,7 @@ const makePayloadForInvoice = () => {
       amount: item.rate,
       complementryItem: item.complementryItem,
       custom_is_complimentary_item: item.custom_is_complimentary_item,
+      custom_complimentary_reason: item.custom_complimentary_reason,
       complementryLoopyItem: item.complementryLoopyItem,
       custom_is_loopy_complimentary_item: item.custom_is_loopy_complimentary_item,
       posa_notes:item.comment,

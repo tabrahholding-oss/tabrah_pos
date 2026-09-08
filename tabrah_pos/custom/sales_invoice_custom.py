@@ -34,6 +34,7 @@ def on_submit(self, method):
                             if bom:
                                 doc = frappe.get_doc({
                                     'doctype': 'Automated BOM Manufacturing',
+                                    'company': self.company,
                                     'item_code': packed_item.item_code,
                                     'bom': bom,
                                     'posting_date': self.posting_date,
@@ -54,6 +55,7 @@ def on_submit(self, method):
                         if bom:
                             doc = frappe.get_doc({
                                 'doctype': 'Automated BOM Manufacturing',
+                                'company': self.company,
                                 'item_code': d.item_code,
                                 'bom': bom,
                                 'posting_date': self.posting_date,
