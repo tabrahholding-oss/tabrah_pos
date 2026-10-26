@@ -1264,7 +1264,9 @@ def sales_invoice(data, invoice=None, taxvalue=None):
                     if invoice_doc.doctype == "Purchase Order":
                         tax_row.update({"category": "Total", "add_deduct_tax": "Add"})
                     tax_row.db_insert()
+        
         clean_invoice_for_v15(invoice_doc)
+        invoice_doc.calculate_taxes_and_totals()
         invoice_doc.save()
 
         if data.get("due_date"):
@@ -1324,6 +1326,20 @@ def sales_invoice(data, invoice=None, taxvalue=None):
 
 from typing import Optional, Union
 
+
+def _get_all_employees():
+    return frappe.get_all(
+        "Employee",
+        filters={"status": "Active"},
+        fields=["name", "employee_name", "user_id"],
+    )
+
+
+@frappe.whitelist()
+def get_offer_employees():
+    """Expose the POS employee list to users who can create Sales Invoices."""
+    frappe.has_permission("Sales Invoice", "create", throw=True)
+    return _get_all_employees()
 
 
 def _row_key(item: dict) -> str:

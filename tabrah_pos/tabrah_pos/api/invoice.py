@@ -25,7 +25,13 @@ def validate(doc, method):
     # --- ensure one taxes row carries the tip ---
     doc.taxes = [t for t in (doc.taxes or [])
                  if not (t.account_head == TIPS_ACCOUNT and t.description == "Tip")]
-    if doc.tip:
+    if flt(doc.tip):
+        if not TIPS_ACCOUNT:
+            frappe.throw(
+                _("Set Tip Account in POS Profile {0} before accepting a tip.").format(
+                    pos_profile.name
+                )
+            )
         # remove any old "Tip" rows we added earlier (idempotent)
         # new_taxes = []
         # for t in (self.taxes or []):
@@ -50,24 +56,39 @@ def validate(doc, method):
         doc.taxes = [t for t in (doc.taxes or [])
                      if not (t.account_head == pos_profile.custom_tip_account and t.description == "Tip")]
 
-    # --- prevent 'tip' from being treated as change ---
-    paid_total = sum(flt(p.amount) for p in (doc.payments or []))
-    non_tip_paid = flt(paid_total) - flt(doc.tip) if flt(doc.tip) else 0
-    due_total = doc.grand_total or 0
+    # --- prevent 'tip' from being treated as change ---    previous old code with issues ---Start-------
+    # paid_total = sum(flt(p.amount) for p in (doc.payments or []))
+    # non_tip_paid = flt(paid_total) - flt(doc.tip) if flt(doc.tip) else 0
+    # due_total = doc.grand_total or 0
 
-    change = non_tip_paid - due_total
-    doc.change_amount = flt(change if change > 0 else 0)
+    # change = non_tip_paid - due_total
+    # doc.change_amount = flt(change if change > 0 else 0)
 
-    if flt(doc.tip) and flt(doc.tip) > flt(paid_total):
-        frappe.throw("Tip cannot exceed total paid amount.")
+    # if flt(doc.tip) and flt(doc.tip) > flt(paid_total):
+    #     frappe.throw("Tip cannot exceed total paid amount.") ------ END ---------
 
+    paid_total = flt(sum(flt(p.amount) for p in (doc.payments or [])))
+    change = paid_total - flt(doc.grand_total)   # grand_total already includes the tip
+    doc.change_amount = flt(change) if change > 0 else 0
+    doc.base_change_amount = flt(doc.change_amount * flt(doc.conversion_rate or 1))
     doc.disable_rounded_total = 1
+    frappe.log_error(
+        title="TIP DEBUG validate-end",
+        message=json.dumps({
+            "grand_total": doc.grand_total,
+            "paid_amount": doc.paid_amount,
+            "change_amount": doc.change_amount,
+            "outstanding": doc.outstanding_amount,
+            "taxes": [(t.description, t.charge_type, t.tax_amount) for t in doc.taxes],
+        }, default=str),
+    )
 
     tips_validate(doc)
     validate_shift(doc)
     set_patient(doc)
     auto_set_delivery_charges(doc)
     calc_delivery_charges(doc)
+    doc.calculate_taxes_and_totals() 
 
 
 def before_submit(doc, method):

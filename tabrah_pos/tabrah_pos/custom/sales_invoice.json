@@ -1983,6 +1983,18 @@
    "translatable": 1,
    "unique": 0,
    "width": null
+  },
+  {
+   "doctype": "Custom Field",
+   "dt": "Sales Invoice",
+   "fieldname": "custom_offer_employee",
+   "fieldtype": "Link",
+   "insert_after": "custom_discount_offer",
+   "label": "Offer Employee",
+   "module": "Tabrah Pos",
+   "name": "Sales Invoice-custom_offer_employee",
+   "options": "Employee",
+   "no_copy": 1
   }
  ],
  "custom_perms": [],

@@ -299,6 +299,47 @@
     <v-card>
       <v-card-title>Select an Offer</v-card-title>
       <v-card-text>
+        <v-row>
+          <v-col cols="12">
+            <v-autocomplete
+              v-model="invoice_doc.custom_offer_employee"
+              :items="offerEmployees"
+              item-title="name"
+              item-value="name"
+              label="Employee"
+              placeholder="Search by Employee ID, Employee Name or User ID"
+              variant="outlined"
+              clearable
+              :custom-filter="filterOfferEmployee"
+              :loading="employeesLoading"
+              :error-messages="employeeSearchError"
+            >
+              <template #item="{ props, item }">
+                <v-list-item
+                  v-bind="props"
+                  :title="item.raw.name"
+                  :subtitle="[item.raw.employee_name, item.raw.user_id].filter(Boolean).join(' · ')"
+                />
+              </template>
+            </v-autocomplete>
+          </v-col>
+          <v-col cols="12" sm="6">
+            <v-text-field
+              :model-value="selectedOfferEmployee?.employee_name || ''"
+              label="Employee Name"
+              variant="outlined"
+              readonly
+            />
+          </v-col>
+          <v-col cols="12" sm="6">
+            <v-text-field
+              :model-value="selectedOfferEmployee?.user_id || ''"
+              label="User ID"
+              variant="outlined"
+              readonly
+            />
+          </v-col>
+        </v-row>
         <v-row justify="center">
           <v-col
             v-for="offer in offers"
@@ -398,6 +439,52 @@ const complementaryItemDetails = ref('');
 // const complementaryLoopyItemDetails = ref('');
 const showOffersDialog = ref(false);
 const offers = ref([]);
+const offerEmployees = ref([]);
+const employeesLoading = ref(false);
+const employeeSearchError = ref("");
+const selectedOfferEmployee = computed(() =>
+  offerEmployees.value.find(employee => employee.name === invoice_doc.value.custom_offer_employee)
+);
+let employeeSearchRequest = 0;
+
+const filterOfferEmployee = (_value, query, item) => {
+  const search = (query || "").trim().toLowerCase();
+  return [item.raw.name, item.raw.employee_name, item.raw.user_id]
+    .some(value => String(value || "").toLowerCase().includes(search));
+};
+
+const fetchOfferEmployees = async () => {
+  const request = ++employeeSearchRequest;
+  employeesLoading.value = true;
+  employeeSearchError.value = "";
+  try {
+    const response = await frappe.call({
+      method: "tabrah_pos.tabrah_pos.api.posapp.get_offer_employees",
+    });
+    if (request === employeeSearchRequest) {
+      offerEmployees.value = response.message || [];
+    }
+  } catch (error) {
+    if (request === employeeSearchRequest) {
+      employeeSearchError.value = "Unable to load employees. Check your connection and Sales Invoice permission.";
+    }
+  } finally {
+    if (request === employeeSearchRequest) employeesLoading.value = false;
+  }
+};
+
+watch(showOffersDialog, (isOpen) => {
+  if (isOpen) {
+    fetchOfferEmployees();
+  } else {
+    ++employeeSearchRequest;
+    employeesLoading.value = false;
+  }
+});
+
+watch(() => invoice_doc.value.custom_offer_employee, (employee) => {
+  if (employee && !selectedOfferEmployee.value && !employeesLoading.value) fetchOfferEmployees();
+});
 const discountSource = ref("manual"); // "manual" or "offer"
 // Credit Card is the ONLY auto-amount (locked) mode.
 // Everything else is editable unless split payment is active.
@@ -425,6 +512,11 @@ const uniqueByModeOfPayment = (arr) => {
 };
 
 const setDefaultValue = () => {
+  ++employeeSearchRequest;
+  offerEmployees.value = [];
+  employeeSearchError.value = "";
+  employeesLoading.value = false;
+  showOffersDialog.value = false;
   amountTake.value = null;
   discount.value = "";
   complementaryItemDetails.value = '';
@@ -2277,6 +2369,7 @@ onMounted(() => {
   }
 });
 onUnmounted(() => {
+  ++employeeSearchRequest;
   eventBus.off("punching-status");
   eventBus.off("app-internet-status");
   eventBus.off("updated-invoice");
